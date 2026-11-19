@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>15 Puzzle</title>
+
+<style>
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f4f8;
+    color: #222;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.game-container {
+    width: 100%;
+    max-width: 450px;
+    text-align: center;
+}
+
+h1 {
+    font-size: 32px;
+    margin-bottom: 8px;
+}
+
+.subtitle {
+    color: #777;
+    margin-bottom: 25px;
+}
+
+.stats {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    gap: 10px;
+}
+
+.stat {
+    background: white;
+    padding: 15px;
+    border-radius: 12px;
+    flex: 1;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 5px;
+}
+
+.stat-value {
+    font-size: 22px;
+    font-weight: bold;
+}
+
+.board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    background: #d8d8e2;
+    padding: 8px;
+    border-radius: 15px;
+    aspect-ratio: 1;
+}
+
+.tile {
+    border: none;
+    border-radius: 10px;
+    background: #6366f1;
+    color: white;
+    font-size: clamp(20px, 7vw, 35px);
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.15s;
+    box-shadow: 0 3px 0 #4b4dc0;
+}
+
+.tile:hover {
+    background: #7779ff;
+    transform: scale(1.03);
+}
+
+.tile:active {
+    transform: scale(0.95);
+}
+
+.empty {
+    background: transparent;
+    box-shadow: none;
+    cursor: default;
+}
+
+.empty:hover {
+    background: transparent;
+    transform: none;
+}
+
+.buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+button.action {
+    flex: 1;
+    border: none;
+    border-radius: 10px;
+    padding: 14px;
+    font-size: 16px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.2s;
+}
+
+.shuffle {
+    background: #6366f1;
+    color: white;
+}
+
+.shuffle:hover {
+    background: #4f51d8;
+}
+
+.restart {
+    background: white;
+    color: #333;
+}
+
+.restart:hover {
+    background: #e9e9ef;
+}
+
+.message {
+    margin-top: 20px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #6366f1;
+    min-height: 25px;
+}
+
+@media (max-width: 400px) {
+    .board {
+        gap: 5px;
+        padding: 5px;
+    }
+
+    .tile {
+        border-radius: 7px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="game-container">
+
+    <h1>15 Puzzle</h1>
+    <p class="subtitle">Arrange the numbers in order!</p>
+
+    <div class="stats">
+        <div class="stat">
+            <div class="stat-label">MOVES</div>
+            <div class="stat-value" id="moves">0</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-label">TIME</div>
+            <div class="stat-value" id="timer">00:00</div>
+        </div>
+    </div>
+
+    <div class="board" id="board"></div>
+
+    <div class="buttons">
+        <button class="action shuffle" onclick="shuffleGame()">Shuffle</button>
+        <button class="action restart" onclick="restartGame()">Restart</button>
+    </div>
+
+    <div class="message" id="message"></div>
+
+</div>
+
+<script>
+const boardElement = document.getElementById("board");
+const movesElement = document.getElementById("moves");
+const timerElement = document.getElementById("timer");
+const messageElement = document.getElementById("message");
+
+let tiles = [];
+let moves = 0;
+let seconds = 0;
+let timerInterval = null;
+let gameStarted = false;
+let gameWon = false;
+
+// Create solved board
+function createSolvedBoard() {
+    return [
+        1, 2, 3, 4,
+        5, 6, 7, 8,
+        9, 10, 11, 12,
+        13, 14, 15, 0
+    ];
+}
+
+// Render board
+function renderBoard() {
+    boardElement.innerHTML = "";
+
+    tiles.forEach((number, index) => {
+        const tile = document.createElement("button");
+
+        tile.classList.add("tile");
+
+        if (number === 0) {
+            tile.classList.add("empty");
+            tile.disabled = true;
+            tile.textContent = "";
+        } else {
+            tile.textContent = number;
+            tile.onclick = () => moveTile(index);
+        }
+
+        boardElement.appendChild(tile);
+    });
+}
+
+// Find empty tile
+function findEmpty() {
+    return tiles.indexOf(0);
+}
+
+// Check if two tiles are adjacent
+function areAdjacent(index1, index2) {
+    const row1 = Math.floor(index1 / 4);
+    const col1 = index1 % 4;
+
+    const row2 = Math.floor(index2 / 4);
+    const col2 = index2 % 4;
+
+    return (
+        Math.abs(row1 - row2) + Math.abs(col1 - col2) === 1
+    );
+}
+
+// Move tile
+function moveTile(index) {
+    if (gameWon) return;
+
+    const emptyIndex = findEmpty();
+
+    if (!areAdjacent(index, emptyIndex)) {
+        return;
+    }
+
+    // Start timer on first move
+    if (!gameStarted) {
+        gameStarted = true;
+
+        timerInterval = setInterval(() => {
+            seconds++;
+            updateTimer();
+        }, 1000);
+    }
+
+    // Swap tile with empty space
+    tiles[emptyIndex] = tiles[index];
+    tiles[index] = 0;
+
+    moves++;
+    movesElement.textContent = moves;
+
+    renderBoard();
+
+    checkWin();
+}
+
+// Update timer
+function updateTimer() {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+
+    timerElement.textContent =
+        String(minutes).padStart(2, "0") + ":" +
+        String(remainingSeconds).padStart(2, "0");
+}
+
+// Check victory
+function checkWin() {
+    const solved = createSolvedBoard();
+
+    if (tiles.every((tile, index) => tile === solved[index])) {
+        gameWon = true;
+
+        clearInterval(timerInterval);
+
+        messageElement.textContent =
+            "🎉 You solved it!";
+
+        boardElement.querySelectorAll(".tile").forEach(tile => {
+            tile.style.background = "#22c55e";
+            tile.style.boxShadow = "0 3px 0 #15803d";
+        });
+    }
+}
+
+// Shuffle using random legal moves
+function shuffleGame() {
+    tiles = createSolvedBoard();
+
+    let previousEmpty = -1;
+
+    // Perform 500 random valid moves
+    for (let i = 0; i < 500; i++) {
+        const emptyIndex = findEmpty();
+
+        let possibleMoves = [];
+
+        for (let j = 0; j < 16; j++) {
+            if (areAdjacent(j, emptyIndex)) {
+                possibleMoves.push(j);
+            }
+        }
+
+        // Avoid immediately reversing the previous move
+        if (possibleMoves.length > 1) {
+            possibleMoves = possibleMoves.filter(
+                move => move !== previousEmpty
+            );
+        }
+
+        const randomMove =
+            possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+
+        previousEmpty = emptyIndex;
+
+        tiles[emptyIndex] = tiles[randomMove];
+        tiles[randomMove] = 0;
+    }
+
+    resetStats();
+    renderBoard();
+}
+
+// Restart game
+function restartGame() {
+    tiles = createSolvedBoard();
+    resetStats();
+    renderBoard();
+}
+
+// Reset stats
+function resetStats() {
+    moves = 0;
+    seconds = 0;
+    gameStarted = false;
+    gameWon = false;
+
+    clearInterval(timerInterval);
+
+    movesElement.textContent = "0";
+    timerElement.textContent = "00:00";
+    messageElement.textContent = "";
+}
+
+// Start game
+shuffleGame();
+</script>
+
+</body>
+</html>
